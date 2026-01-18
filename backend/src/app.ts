@@ -4,12 +4,14 @@ import userRoutes from "./routes/userRoutes";
 import chatRoutes from "./routes/chatRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import { errorHandler } from "./middleware/errorHandler";
+import { clerkMiddleware } from "@clerk/express";
 
 const app = express();
 
 //middleware
 app.use(express.json()); //parse json request body
 app.use(express.urlencoded({ extended: true })); //parse urlencoded request body
+app.use(clerkMiddleware());
 
 //routes
 app.get("/health", (req, res) => {
