@@ -40,12 +40,18 @@ export async function authCallback(
     if (!user) {
       // get user info from clerk and save in db
       const clerkUser = await clerkClient.users.getUser(clerkId);
+      const email = clerkUser.emailAddresses?.[0]?.emailAddress;
+
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
       user = await User.create({
         clerkId,
         name: clerkUser.firstName
           ? `${clerkUser.firstName} ${clerkUser.lastName || ""}`.trim()
-          : clerkUser.emailAddresses[0]?.emailAddress.split("@")[0],
-        email: clerkUser.emailAddresses[0]?.emailAddress,
+          : email.split("@")[0],
+        email,
         avatar: clerkUser.imageUrl,
       });
     }
