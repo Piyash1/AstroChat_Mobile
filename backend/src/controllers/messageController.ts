@@ -10,7 +10,7 @@ export async function getMessages(
 ) {
   try {
     const userId = req.userId;
-    const { chatId } = req.params;
+    const chatId = req.params.chatId as string;
 
     const chat = await Chat.findOne({
       _id: chatId,
