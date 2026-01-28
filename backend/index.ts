@@ -7,10 +7,9 @@ const PORT = process.env.PORT || 3000;
 
 const httpServer = createServer(app);
 
-initializeSocket(httpServer);
-
 connectDB()
   .then(() => {
+    initializeSocket(httpServer);
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

@@ -13,11 +13,20 @@ interface SocketWithUserId extends Socket {
 export const onlineUsers: Map<string, string> = new Map();
 
 export const initializeSocket = (httpServer: HttpServer) => {
+  if (!process.env.CLERK_SECRET_KEY) {
+    console.error(
+      "CRITICAL: CLERK_SECRET_KEY is not defined in environment variables.",
+    );
+    throw new Error(
+      "CLERK_SECRET_KEY is missing. Socket initialization aborted.",
+    );
+  }
+
   const allowedOrigins = [
     "http://localhost:8081", // Expo Mobile
     "http://localhost:5173", // Vite Web
-    process.env.FRONTEND_URL as string, // Production
-  ];
+    process.env.FRONTEND_URL, // Production
+  ].filter((origin): origin is string => Boolean(origin && origin.length > 0));
 
   const io = new SocketServer(httpServer, {
     cors: { origin: allowedOrigins },
@@ -32,7 +41,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
 
     try {
       const session = await verifyToken(token, {
-        secretKey: process.env.CLERK_SECRET_KEY!,
+        secretKey: process.env.CLERK_SECRET_KEY,
       });
 
       const clerkId = session.sub;
@@ -64,8 +73,24 @@ export const initializeSocket = (httpServer: HttpServer) => {
 
     socket.join(`user:${userId}`);
 
-    socket.on("join-chat", (chatId: string) => {
-      socket.join(`chat:${chatId}`);
+    socket.on("join-chat", async (chatId: string) => {
+      try {
+        const chat = await Chat.findOne({
+          _id: chatId,
+          participants: userId,
+        });
+
+        if (!chat) {
+          socket.emit("error", {
+            message: "You are not a participant in this chat",
+          });
+          return;
+        }
+
+        socket.join(`chat:${chatId}`);
+      } catch (error) {
+        socket.emit("error", { message: "Failed to join chat" });
+      }
     });
 
     socket.on("leave-chat", (chatId: string) => {
@@ -79,6 +104,21 @@ export const initializeSocket = (httpServer: HttpServer) => {
         try {
           const { chatId, text } = data;
 
+          const trimmedText = text?.trim();
+          const MAX_TEXT_LENGTH = 2000;
+
+          if (!trimmedText || trimmedText.length === 0) {
+            socket.emit("error", { message: "Message text cannot be empty" });
+            return;
+          }
+
+          if (trimmedText.length > MAX_TEXT_LENGTH) {
+            socket.emit("error", {
+              message: `Message is too long. Max ${MAX_TEXT_LENGTH} characters.`,
+            });
+            return;
+          }
+
           const chat = await Chat.findOne({
             _id: chatId,
             participants: userId,
@@ -91,16 +131,14 @@ export const initializeSocket = (httpServer: HttpServer) => {
           const message = await Message.create({
             chat: chatId,
             sender: userId,
-            text,
+            text: trimmedText,
           });
 
           chat.lastMessage = message._id;
           chat.lastMessageAt = new Date();
           await chat.save();
 
-          await message.populate("sender", "name email avatar");
-
-          io.to(`chat:${chatId}`).emit("new-message", message);
+          await message.populate("sender", "name avatar");
 
           // notify all participants that a new message has been sent
           for (const participantId of chat.participants) {
