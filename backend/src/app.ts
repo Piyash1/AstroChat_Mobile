@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
 import chatRoutes from "./routes/chatRoutes";
@@ -26,5 +27,14 @@ app.use("/api/messages", messageRoutes);
 
 // Error handler middleware (must be at the end)
 app.use(errorHandler);
+
+// serve frontend in production
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../../web/dist")));
+
+  app.get("/{*any}", (_, res) => {
+    res.sendFile(path.join(__dirname, "../../web/dist/index.html"));
+  });
+}
 
 export default app;
